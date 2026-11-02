@@ -51,6 +51,12 @@ data class HomeUi(
     val cacheAgeMin: Long? = null,
     val geoLabel: String = "",
     val message: String = "",
+    /** The last session's server choice — feeds the quick-reconnect row.
+     *  [lastCountry] carries the cc that selectServers matches on;
+     *  [lastCountryLabel] is its human-readable display name. */
+    val lastCountry: String? = null,
+    val lastCountryLabel: String? = null,
+    val lastCity: String? = null,
 )
 
 data class TerminalLine(val text: String, val tone: Tone) {
@@ -143,6 +149,10 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
     private fun projectCacheToHome() {
         val servers = cache?.servers.orEmpty()
         home.update { h ->
+            val cc = intent?.country
+            val label = cc?.let { want ->
+                servers.firstOrNull { it.cc == want }?.country
+            } ?: cc
             h.copy(
                 connected = h.connected,
                 servers = servers.size,
@@ -150,6 +160,9 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                 cacheAgeMin = cache?.let {
                     (System.currentTimeMillis() - it.updated) / 60_000L
                 },
+                lastCountry = cc,
+                lastCity = intent?.city,
+                lastCountryLabel = label,
             )
         }
     }
@@ -345,7 +358,14 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
         )
         intent = fresh
         sessionStore.save(fresh)
-        home.update { it.copy(connected = true) }
+        home.update {
+            it.copy(
+                connected = true,
+                lastCountry = fresh.country,
+                lastCountryLabel = r.country,
+                lastCity = fresh.city,
+            )
+        }
         line("Connected · ${r.country}" +
              (if (r.city.isNotBlank()) " · ${r.city}" else ""),
              TerminalLine.Tone.OK)

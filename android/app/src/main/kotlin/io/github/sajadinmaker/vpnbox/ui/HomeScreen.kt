@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Redeem
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
@@ -53,6 +54,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,10 +65,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalView
 import io.github.sajadinmaker.vpnbox.HomeUi
 import io.github.sajadinmaker.vpnbox.R
 
-enum class HomeAction { ConnectFast, PickCountry, Refresh, Disconnect, Settings, About }
+enum class HomeAction { ConnectFast, ReconnectLast, PickCountry, Refresh, Disconnect, Settings, About }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -273,6 +276,23 @@ private fun ActionsCard(ui: HomeUi, onAction: (HomeAction) -> Unit) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(vertical = 4.dp)) {
+            // quick reconnect: the last session's country/city, one tap away
+            ui.lastCountry?.let { last ->
+                if (!ui.connected) {
+                    ActionRow(
+                        icon = Icons.Filled.Redeem,
+                        title = if (ui.lastCity.isNullOrBlank())
+                            stringResource(R.string.action_reconnect_title, ui.lastCountryLabel ?: last)
+                        else stringResource(
+                            R.string.action_reconnect_title_city,
+                            ui.lastCountryLabel ?: last, ui.lastCity!!,
+                        ),
+                        subtitle = stringResource(R.string.action_reconnect_subtitle),
+                        enabled = ui.servers > 0,
+                        tint = MaterialTheme.colorScheme.primary,
+                    ) { onAction(HomeAction.ReconnectLast) }
+                }
+            }
             ActionRow(
                 icon = Icons.Filled.Bolt,
                 title = stringResource(R.string.action_connect_title),
@@ -314,6 +334,7 @@ private fun ActionRow(
     tint: Color,
     onClick: () -> Unit,
 ) {
+    val view = LocalView.current
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = { Text(subtitle) },
@@ -345,7 +366,11 @@ private fun ActionRow(
             )
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.clickable(enabled = enabled, onClick = onClick),
+        modifier = Modifier.clickable(enabled = enabled) {
+            // light tactile confirmation on every primary action tap (API-safe)
+            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            onClick()
+        },
     )
 }
 

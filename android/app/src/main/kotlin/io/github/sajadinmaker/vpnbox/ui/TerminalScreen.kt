@@ -1,5 +1,6 @@
 package io.github.sajadinmaker.vpnbox.ui
 
+import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -23,17 +25,28 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,16 +55,30 @@ import io.github.sajadinmaker.vpnbox.R
 import io.github.sajadinmaker.vpnbox.TerminalLine
 import io.github.sajadinmaker.vpnbox.TerminalUi
 import io.github.sajadinmaker.vpnbox.WatchPhase
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalScreen(ui: TerminalUi, onBack: () -> Unit, onKill: () -> Unit) {
     val scroll = rememberScrollState()
+    val view = LocalView.current
+    val clipboard = LocalClipboardManager.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    var copied by remember { mutableStateOf(false) }
+    val copiedMsg = stringResource(R.string.terminal_copied)
     LaunchedEffect(ui.lines.size) {
         runCatching { scroll.animateScrollTo(scroll.maxValue) }
     }
+    LaunchedEffect(copied) {
+        if (copied) {
+            snackbarHostState.showSnackbar(copiedMsg, duration = SnackbarDuration.Short)
+            copied = false
+        }
+    }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.terminal_title)) },
@@ -61,6 +88,22 @@ fun TerminalScreen(ui: TerminalUi, onBack: () -> Unit, onKill: () -> Unit) {
                     }
                 },
                 actions = {
+                    IconButton(
+                        enabled = ui.lines.isNotEmpty(),
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            clipboard.setText(
+                                AnnotatedString(ui.lines.joinToString("\n") { it.text }),
+                            )
+                            copied = true
+                        },
+                    ) {
+                        Icon(
+                            Icons.Filled.ContentCopy,
+                            contentDescription = stringResource(R.string.terminal_copy_log),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Text(
                         phaseTag(ui.phase),
                         style = MaterialTheme.typography.labelLarge,
@@ -150,7 +193,10 @@ fun TerminalScreen(ui: TerminalUi, onBack: () -> Unit, onKill: () -> Unit) {
                     modifier = Modifier.weight(1f),
                 ) { Text(stringResource(R.string.terminal_back)) }
                 OutlinedButton(
-                    onClick = onKill,
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        onKill()
+                    },
                     enabled = ui.phase == WatchPhase.WATCH,
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.error,

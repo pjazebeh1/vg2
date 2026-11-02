@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.Copyright
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Psychology
@@ -45,6 +46,7 @@ import io.github.sajadinmaker.vpnbox.R
 
 private const val SOURCE_URL = "https://github.com/sajadinmaker/vpnbox"
 private const val ISSUES_URL = "https://github.com/sajadinmaker/vpnbox/issues"
+private const val NOTICE_URL = "https://github.com/sajadinmaker/vpnbox/blob/main/NOTICE"
 
 private fun Context.launchOrIgnore(url: String) {
     runCatching {
@@ -131,6 +133,12 @@ fun AboutScreen(onBack: () -> Unit) {
                     title = stringResource(R.string.about_report),
                     subtitle = "github.com/sajadinmaker/vpnbox/issues",
                     onClick = { ctx.launchOrIgnore(ISSUES_URL) },
+                )
+                InfoRow(
+                    icon = Icons.Outlined.Copyright,
+                    title = stringResource(R.string.about_licensing),
+                    subtitle = stringResource(R.string.about_licensing_sub),
+                    onClick = { ctx.launchOrIgnore(NOTICE_URL) },
                 )
             }
             InfoCard {

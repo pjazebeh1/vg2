@@ -22,6 +22,9 @@
     <string name="action_refresh_subtitle">Download the latest server list from VPN Gate</string>
     <string name="action_disconnect_title">Disconnect</string>
     <string name="action_disconnect_subtitle">End the current connection</string>
+    <string name="action_reconnect_title">Reconnect to %1$s</string>
+    <string name="action_reconnect_title_city">Reconnect to %1$s · %2$s</string>
+    <string name="action_reconnect_subtitle">Your last session\'s server choice</string>
     <string name="home_footer">Powered by volunteer-run VPN Gate community servers</string>
 
     <!-- Home top-bar overflow menu -->
@@ -33,6 +36,8 @@
     <string name="terminal_title">Live session</string>
     <string name="terminal_back">Back</string>
     <string name="terminal_kill">Kill tunnel</string>
+    <string name="terminal_copy_log">Copy session log</string>
+    <string name="terminal_copied">Session log copied to clipboard</string>
     <string name="tag_connecting">CONNECTING</string>
     <string name="tag_protected">PROTECTED</string>
     <string name="tag_reconnecting">RECONNECTING</string>
@@ -47,6 +52,8 @@
     <!-- Country picker -->
     <string name="sheet_title">Choose a country</string>
     <string name="sheet_subtitle">%1$d locations available</string>
+    <string name="sheet_search_hint">Search…</string>
+    <string name="sheet_search_empty">No country matches “%1$s”</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -66,6 +73,8 @@
     <string name="about_engine_sub">Real OpenVPN 3 core — the same engine as desktop OpenVPN, built into the app</string>
     <string name="about_source">Source code</string>
     <string name="about_report">Report an issue</string>
+    <string name="about_licensing">Licensing</string>
+    <string name="about_licensing_sub">vpnbox is MIT; the bundled OpenVPN 3 core and its components keep their own licenses</string>
     <string name="about_vpngate_title">VPN Gate</string>
     <string name="about_vpngate_sub">A free public relay service operated by the University of Tsukuba, Japan. Relay servers are run by volunteers worldwide.</string>
     <string name="about_public_note">A VPN Gate relay is a public network — treat tunneling over it as you would any public Wi-Fi.</string>

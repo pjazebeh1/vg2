@@ -3,6 +3,29 @@
 All notable changes to vpnbox. The first stable will be `1.0.0`; the beta
 cycle uses `1.0.0-beta1`, `1.0.0-beta2`, …
 
+## 1.0.0-beta7-android — 2026-11-01
+
+### Added
+- Country picker search: the bottom sheet now has a search field that
+  immediately filters the list, with an empty-state row when nothing
+  matches — important now that the relay list grows past a few dozen.
+- Quick reconnect: the Home screen shows a dedicated row for the last
+  session's country (display name, not the bare cc — "Reconnect to Korea
+  Republic of"), one tap re-enters the tunnel with the same choice. It
+  appears whenever the app is disconnected and a session intent exists.
+- Session log copy: the terminal screen's top bar has a copy action that
+  puts the live session log on the clipboard, with a confirmation
+  snackbar — useful for reporting broken relays.
+- Haptic feedback on every primary action (connect, reconnect,
+  disconnect, kill tunnel, copy log) — light virtual-key-level taps.
+- About screen: a Licensing row that opens the per-component license
+  table in [NOTICE](NOTICE).
+
+### Fixed
+- Release pipeline: publishing now runs entirely in GitHub Actions from
+  the tag (the four signing secrets were wired in after beta6's manual
+  step); CI-produced APKs are verified against the same release key.
+
 ## 1.0.0-beta6-android — 2026-10-30
 
 ### Removed

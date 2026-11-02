@@ -13,8 +13,8 @@ android {
     applicationId = "io.github.sajadinmaker.vpnbox"
     minSdk = 26
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.0.0-beta6-android"
+    versionCode = 3
+    versionName = "1.0.0-beta7-android"
   }
 
   signingConfigs {

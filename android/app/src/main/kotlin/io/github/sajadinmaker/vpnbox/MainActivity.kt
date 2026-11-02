@@ -107,6 +107,11 @@ class MainActivity : ComponentActivity() {
                                     when (action) {
                                         HomeAction.ConnectFast ->
                                             guardedConnect(null, null)
+                                        HomeAction.ReconnectLast ->
+                                            guardedConnect(
+                                                vm.home.value.lastCountry,
+                                                vm.home.value.lastCity,
+                                            )
                                         HomeAction.PickCountry -> {
                                             vm.rebuildCountries()
                                             picking = true

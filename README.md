@@ -30,7 +30,7 @@ it succeeds or you disconnect.
 ## Install
 
 Download
-[`vpnbox-1.0.0-beta6-android.apk`](https://github.com/sajadinmaker/vpnbox/releases)
+[`vpnbox-1.0.0-beta7-android.apk`](https://github.com/sajadinmaker/vpnbox/releases)
 (~34 MB — the OpenVPN 3 core ships inside for four ABIs) from the GitHub
 Releases page. Android releases begin at the tag `v1.0.0-beta5-android`.
 The app requires Android 8.0 or newer.
