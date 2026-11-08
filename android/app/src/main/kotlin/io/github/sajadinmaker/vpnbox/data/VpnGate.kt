@@ -1,8 +1,8 @@
+
 package io.github.sajadinmaker.vpnbox.data
 
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.Base64
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -13,45 +13,52 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/** VPN Gate source: fetch + parse. Semantic twin of the CLI port (vpnbox.py). */
+/** VPN Gate source: fetch + parse. */
 object VpnGate {
+
     const val APP = "vpnbox"
     const val APP_VERSION = "1.0.0-beta5-android"
     const val UA = "$APP/$APP_VERSION (android; free public VPN client)"
+
+    // GitHub mirror: standard VPN Gate CSV
+    const val GITHUB_SOURCE =
+        "https://cdn.jsdelivr.net/gh/GeorgeXie2333/vpngate-list-mirror@latest/data/vpngate.csv"
+
+    // Original VPN Gate sources (fallback)
     const val DEFAULT_SOURCE = "https://www.vpngate.net/api/iphone/"
-    const val MIRROR_SOURCE = "http://www.vpngate.net/api/iphone/"
+    const constMirror = "http://www.vpngate.net/api/iphone/"
+    const MIRROR_SOURCE = constMirror
+
     const val HOSTNAME_HEADER = "#HostName"
-    const val PING_DEFAULT = 10          // seconds between OpenVPN channel pings
-    const val PING_EXIT_DEFAULT = 60     // exit the tunnel when no ping comes back
+
+    const val PING_DEFAULT = 10
+    const val PING_EXIT_DEFAULT = 60
     const val OK_MARKER = "Initialization Sequence Completed"
 
-    // Windows-only directives that make OpenVPN error out — strip them.
     val STRIP_PREFIXES = listOf(
-        "win-sys", "route-method", "route-delay", "dhcp-renew", "dhcp-release",
-        "show-net-up", "ip-win32", "register-dns", "tun-ipv6",
+        "win-sys", "route-method", "route-delay", "dhcp-renew",
+        "dhcp-release", "show-net-up", "ip-win32", "register-dns",
+        "tun-ipv6",
     )
 
-    const val EXTRA_CONFIG =
+    val EXTRA_CONFIG =
         "### vpnbox additions (below are ours; keep them last)\n" +
             "script-security 2\n" +
             "data-ciphers AES-256-GCM:AES-128-GCM:AES-192-GCM:AES-256-CBC:AES-128-CBC:CHACHA20-POLY1305\n" +
             "connect-retry 2  8\n" +
             "connect-retry-max 3\n" +
             "pull-filter ignore \"bypass-dhcp\"\n" +
-            // VPN Gate relays authenticate with the service's fixed anonymous
-            // pair ('vpn'/'vpn' — stated on the public server list). The relay
-            // sends AUTH_FAILED for empty credentials otherwise.
             "<auth-user-pass>\n" +
             "vpn\n" +
             "vpn\n" +
             "</auth-user-pass>\n" +
-            "# full-tunnel enforcement — don't trust the server to push these:\n" +
             "redirect-gateway def1\n" +
             "block-ipv6\n"
 
     val FAIL_MARKERS = listOf(
-        "Options error", "AUTH_FAILED", "Cannot resolve host", "Connection refused",
-        "Connection timed out", "Connection reset by peer", "No route to host",
+        "Options error", "AUTH_FAILED", "Cannot resolve host",
+        "Connection refused", "Connection timed out",
+        "Connection reset by peer", "No route to host",
         "Network is unreachable", "Error opening configuration file",
         "Failed to establish", "TUNSETIFF failed",
         "All connections have been", "Exiting due to fatal error",
@@ -61,8 +68,14 @@ object VpnGate {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** GitHub first, then official VPN Gate fallbacks. */
     fun sourceUrls(vpngateApi: String? = null): List<String> =
-        listOfNotNull(vpngateApi, DEFAULT_SOURCE, MIRROR_SOURCE)
+        listOfNotNull(
+            vpngateApi,
+            GITHUB_SOURCE,
+            DEFAULT_SOURCE,
+            MIRROR_SOURCE
+        )
 
     fun httpGet(
         url: String,
@@ -77,33 +90,55 @@ object VpnGate {
             setRequestProperty("User-Agent", UA)
             if (data != null) {
                 doOutput = true
-                setRequestProperty("Content-Type", contentType ?: "application/json")
+                setRequestProperty(
+                    "Content-Type",
+                    contentType ?: "application/json"
+                )
             }
         }
+
         try {
-            if (data != null) conn.outputStream.use { it.write(data) }
+            if (data != null) {
+                conn.outputStream.use { it.write(data) }
+            }
+
             val code = conn.responseCode
-            if (code !in 200..299) throw VpnGateError("HTTP error $code")
+            if (code !in 200..299) {
+                throw VpnGateError("HTTP error $code")
+            }
+
             return conn.inputStream.use { it.readBytes() }
+
         } catch (e: VpnGateError) {
             throw e
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            throw VpnGateError("network error: " +
-                "${e.javaClass.simpleName}: ${e.message}")
+            throw VpnGateError(
+                "network error: ${e.javaClass.simpleName}: ${e.message}"
+            )
         } finally {
             conn.disconnect()
         }
     }
 
-    /** Fetch the list, trying mirrors until one returns a parseable payload. */
+    /** Fetch server list, trying GitHub first and fallbacks afterward. */
     fun fetchListText(urls: List<String> = sourceUrls()): String {
         var lastErr: Exception? = null
+
         for (url in urls) {
             try {
                 val text = httpGet(url).toString(Charsets.UTF_8)
-                if (HOSTNAME_HEADER in text) return text
+
+                if (HOSTNAME_HEADER in text) {
+                    return text
+                }
+
+                android.util.Log.e(
+                    "vpnbox",
+                    "Invalid VPN Gate response from $url"
+                )
+
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -111,30 +146,42 @@ object VpnGate {
                 lastErr = e
             }
         }
+
         throw VpnGateError(
             "could not reach any VPN Gate mirror " +
                 "(${lastErr?.javaClass?.simpleName}: ${lastErr?.message}). " +
-                "Check your connection and try again.")
+                "Check your connection and try again."
+        )
     }
 
-    /**
-     * Public-IP lookup, best-effort: a network failure must never turn a
-     * successful connect (or a status read) into a crashed screen.
-     */
+    /** Public-IP lookup, best-effort. */
     fun fetchGeo(): Map<String, String>? {
         return try {
             val body = httpGet(
                 "http://ip-api.com/json?fields=status,country,countryCode," +
-                    "regionName,city,isp,query", timeoutMs = 8_000,
+                    "regionName,city,isp,query",
+                timeoutMs = 8_000,
             ).toString(Charsets.UTF_8)
+
             val obj = json.parseToJsonElement(body).jsonObject
-            if (obj["status"]?.jsonPrimitive?.content != "success") return null
-            val out = mutableMapOf<String, String>()
-            for (k in listOf("query", "country", "countryCode", "regionName",
-                              "city", "isp")) {
-                obj[k]?.let { out[k] = it.jsonPrimitive.content }
+
+            if (obj["status"]?.jsonPrimitive?.content != "success") {
+                return null
             }
+
+            val out = mutableMapOf<String, String>()
+
+            for (k in listOf(
+                "query", "country", "countryCode",
+                "regionName", "city", "isp"
+            )) {
+                obj[k]?.let {
+                    out[k] = it.jsonPrimitive.content
+                }
+            }
+
             out
+
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -142,41 +189,66 @@ object VpnGate {
         }
     }
 
-    /** ip-api.com free batch geolocation (100 IPs/req, best-effort). */
+    /** Best-effort IP geolocation enrichment. */
     fun enrichCity(servers: List<Server>, top: Int = 300): Int {
         val targets = servers.sortedByDescending { it.score }.take(top)
+
         if (targets.isEmpty()) return 0
+
         var ok = 0
+
         for (ci in targets.indices step 100) {
-            val chunk = targets.slice(ci until minOf(ci + 100, targets.size))
+            val chunk = targets.slice(
+                ci until minOf(ci + 100, targets.size)
+            )
+
             if (chunk.size > 100) break
+
             try {
-                val payload = JsonArray(chunk.map { kotlinx.serialization.json.JsonPrimitive(it.ip) })
-                    .toString().toByteArray()
+                val payload = JsonArray(
+                    chunk.map {
+                        kotlinx.serialization.json.JsonPrimitive(it.ip)
+                    }
+                ).toString().toByteArray()
+
                 val body = httpGet(
                     "http://ip-api.com/batch?fields=status,country,countryCode," +
-                        "regionName,city,isp,lat,lon,query", timeoutMs = 20_000,
+                        "regionName,city,isp,lat,lon,query",
+                    timeoutMs = 20_000,
                     data = payload,
                 ).toString(Charsets.UTF_8)
-                val byIp = json.parseToJsonElement(body).jsonArray
+
+                val byIp = json.parseToJsonElement(body)
+                    .jsonArray
                     .filterIsInstance<JsonObject>()
-                    .associateBy { it["query"]?.jsonPrimitive?.content ?: "" }
+                    .associateBy {
+                        it["query"]?.jsonPrimitive?.content ?: ""
+                    }
+
                 for (t in targets) {
                     val g = byIp[t.ip] ?: continue
-                    if (g["status"]?.jsonPrimitive?.booleanOrNull != true) continue
+
+                    if (g["status"]?.jsonPrimitive?.booleanOrNull != true) {
+                        continue
+                    }
+
                     val obj = g.jsonObject
+
                     val city = obj["city"]?.jsonPrimitive?.content ?: ""
                     t.city = city
                     t.isp = obj["isp"]?.jsonPrimitive?.content ?: ""
                     t.region = obj["regionName"]?.jsonPrimitive?.content ?: ""
                     t.lat = obj["lat"]?.jsonPrimitive?.doubleOrNull
                     t.lon = obj["lon"]?.jsonPrimitive?.doubleOrNull
+
                     if (city.isNotEmpty()) ok++
                 }
+
             } catch (e: Exception) {
                 continue
             }
         }
+
         return ok
     }
 }
