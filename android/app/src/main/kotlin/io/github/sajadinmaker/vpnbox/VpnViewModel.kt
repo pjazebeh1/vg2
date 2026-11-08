@@ -97,8 +97,8 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
     private val cycleMax = 3
 
     // Smart Connect
-    private val smartConnectMaxTries = 5
-    private val smartConnectHandshakeTimeout = 20_000L
+    // No server-count limit: inspect every ranked server.
+    private val smartConnectHandshakeTimeout = 5_000L
     private var handshakeWaiter: CompletableDeferred<Boolean>? = null
 
     private var started = false
@@ -280,7 +280,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                 validateArgs(
                     skip = 0,
                     index = null,
-                    maxTries = smartConnectMaxTries,
+                    maxTries = Int.MAX_VALUE,
                     ping = ping,
                     pingExit = exit
                 )
@@ -290,12 +290,10 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                 if (c == null ||
                     System.currentTimeMillis() - c.updated > 30 * 60_000L
                 ) {
-                    if (c != null) {
-                        line(
-                            "Server list is missing or outdated — downloading a fresh copy…",
-                            TerminalLine.Tone.WARN
-                        )
-                    }
+                    line(
+                        "Server list is missing or outdated — downloading a fresh copy…",
+                        TerminalLine.Tone.WARN
+                    )
 
                     val text = VpnGate.fetchListText()
                     val servers = VpnGateParser.parse(text)
@@ -307,11 +305,11 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                     rebuildCountries()
                 }
 
-                val servers0 = c?.servers ?: emptyList()
+                var servers0 = c?.servers ?: emptyList()
 
                 if (servers0.isEmpty()) {
                     line(
-                        "Refresh completed, but the server list is unavailable",
+                        "Server list is unavailable",
                         TerminalLine.Tone.ERR
                     )
                     terminal.update { it.copy(phase = WatchPhase.FAILED) }
@@ -331,65 +329,128 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
 
                 line("Checking server reachability...", TerminalLine.Tone.PLAIN)
 
-                val checked = ServerHealthChecker.rankForConnect(selected)
-                val reachable = checked.count { it.tcpReachable == true }
-                val tcpCount = checked.count { it.server.proto.equals("tcp", true) }
+                var checked = ServerHealthChecker.rankForConnect(selected)
+                var reachable = checked.count { it.tcpReachable == true }
+                val tcpCount = checked.count {
+                    it.server.proto.equals("tcp", true)
+                }
 
                 line(
                     "Precheck: $reachable/$tcpCount TCP endpoints reachable",
                     TerminalLine.Tone.PLAIN
                 )
 
-                val sel = checked.map { it.server }
-                val triesN = minOf(sel.size, smartConnectMaxTries)
+                // Keep trying indefinitely until a real handshake succeeds.
+                var round = 0
 
-                for ((i, r) in sel.take(triesN).withIndex()) {
-                    attemptLine(i, triesN, r)
+                while (true) {
+                    round++
+
+                    val ranked = checked.map { it.server }
 
                     line(
-                        "Waiting for OpenVPN handshake (max 20 s)…",
-                        TerminalLine.Tone.PLAIN
+                        "Starting server scan · round $round · ${ranked.size} servers",
+                        TerminalLine.Tone.ACCENT
                     )
 
-                    val handshake = CompletableDeferred<Boolean>()
-                    handshakeWaiter = handshake
-                    hasHandshake = false
+                    for ((i, r) in ranked.withIndex()) {
+                        attemptLine(i, ranked.size, r)
 
-                    val started = engine.start(
-                        r,
-                        keepalive = Pair(ping, exit)
-                    ).isSuccess
+                        line(
+                            "Waiting for OpenVPN handshake (max 5 s)…",
+                            TerminalLine.Tone.PLAIN
+                        )
 
-                    val confirmed = if (started) {
-                        withTimeoutOrNull(smartConnectHandshakeTimeout) {
-                            handshake.await()
-                        } == true
-                    } else {
-                        false
+                        val handshake = CompletableDeferred<Boolean>()
+                        handshakeWaiter = handshake
+                        hasHandshake = false
+
+                        val started = engine.start(
+                            r,
+                            keepalive = Pair(ping, exit)
+                        ).isSuccess
+
+                        val confirmed = if (started) {
+                            withTimeoutOrNull(smartConnectHandshakeTimeout) {
+                                handshake.await()
+                            } == true
+                        } else {
+                            false
+                        }
+
+                        handshakeWaiter = null
+
+                        if (confirmed) {
+                            succeed(r, country, city, exit)
+                            startWatchLoop(country, city, exit)
+                            return@launch
+                        }
+
+                        line(
+                            "Handshake failed or timed out after 5 s — next server",
+                            TerminalLine.Tone.WARN
+                        )
+
+                        runCatching { engine.stop() }
+                        delay(150)
                     }
 
-                    handshakeWaiter = null
-
-                    if (confirmed) {
-                        succeed(r, country, city, exit)
-                        startWatchLoop(country, city, exit)
-                        return@launch
-                    }
-
+                    // Every server in the current list has been attempted.
                     line(
-                        "Handshake failed or timed out — stopping this server and trying the next one",
+                        "All ${ranked.size} servers failed — refreshing list and retrying",
                         TerminalLine.Tone.WARN
                     )
 
                     runCatching { engine.stop() }
-                    delay(700)
-                }
+                    delay(500)
 
-                line(
-                    "All attempts failed. Refresh the server list and try again",
-                    TerminalLine.Tone.ERR
-                )
-                terminal.update { it.copy(phase = WatchPhase.FAILED) }
+                    try {
+                        val text = VpnGate.fetchListText()
+                        servers0 = VpnGateParser.parse(text)
+                        VpnGate.enrichCity(servers0)
+
+                        val fresh = ServerCache(
+                            System.currentTimeMillis(),
+                            servers0
+                        )
+
+                        cacheStore.save(fresh)
+                        cache = fresh
+                        projectCacheToHome()
+                        rebuildCountries()
+
+                        val (newSelected, _) =
+                            selectServers(servers0, country, city)
+
+                        if (newSelected.isNotEmpty()) {
+                            checked =
+                                ServerHealthChecker.rankForConnect(newSelected)
+
+                            reachable =
+                                checked.count { it.tcpReachable == true }
+
+                            line(
+                                "New list: ${checked.size} servers · " +
+                                    "$reachable TCP reachable",
+                                TerminalLine.Tone.PLAIN
+                            )
+                        } else {
+                            line(
+                                "No servers found in refreshed list — retrying",
+                                TerminalLine.Tone.WARN
+                            )
+                            delay(1000)
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        line(
+                            "Server refresh failed: ${e.message ?: "network error"}",
+                            TerminalLine.Tone.ERR
+                        )
+                        delay(2000)
+                    }
+                }
 
             } catch (e: CancellationException) {
                 throw e
