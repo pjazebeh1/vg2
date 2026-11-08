@@ -101,6 +101,10 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
     private var hasHandshake = false
     private var downPending = false
     private val cycleMax = 3
+
+    // Smart Connect: try up to five candidate servers.
+    private val smartConnectMaxTries = 5
+
     private var started = false
 
     fun start() {
@@ -311,7 +315,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                 validateArgs(
                     skip = 0,
                     index = null,
-                    maxTries = 3,
+                    maxTries = smartConnectMaxTries,
                     ping = ping,
                     pingExit = exit
                 )
@@ -359,7 +363,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
 
-                // انتخاب سرورها بر اساس کشور و شهر
+                // Select servers according to country and city.
                 val (selected, why) =
                     selectServers(servers0, country, city)
 
@@ -378,7 +382,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
 
-                // بررسی اولیه دسترسی سرورها
+                // Initial server reachability check.
                 line(
                     "Checking server reachability...",
                     TerminalLine.Tone.PLAIN
@@ -404,7 +408,8 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                     it.server
                 }
 
-                val triesN = minOf(sel.size, 3)
+                // Smart Connect: try at most five ranked candidates.
+                val triesN = minOf(sel.size, smartConnectMaxTries)
 
                 for ((i, r) in sel.take(triesN).withIndex()) {
 
