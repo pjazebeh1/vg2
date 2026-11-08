@@ -98,7 +98,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
 
     // Smart Connect
     // No server-count limit: inspect every ranked server.
-    private val smartConnectHandshakeTimeout = 30_000L
+    private val smartConnectHandshakeTimeout = 3_000L
     private var handshakeWaiter: CompletableDeferred<Boolean>? = null
 
     private var started = false
