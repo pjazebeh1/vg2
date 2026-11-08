@@ -15,9 +15,9 @@ import kotlinx.serialization.json.jsonPrimitive
 /** VPN Gate source: fetch + parse. */
 object VpnGate {
 
-    const val APP = "vpnbox"
-    const APP_VERSION = "1.0.0-beta5-android"
-    const UA = "$APP/$APP_VERSION (android; free public VPN client)"
+    val APP: String = "vpnbox"
+    val APP_VERSION: String = "1.0.0-beta5-android"
+    val UA: String = "$APP/$APP_VERSION (android; free public VPN client)"
 
     // GitHub mirror: standard VPN Gate CSV
     const val GITHUB_SOURCE =
@@ -41,17 +41,17 @@ object VpnGate {
 
     val EXTRA_CONFIG =
         "### vpnbox additions (below are ours; keep them last)\n" +
-            "script-security 2\n" +
-            "data-ciphers AES-256-GCM:AES-128-GCM:AES-192-GCM:AES-256-CBC:AES-128-CBC:CHACHA20-POLY1305\n" +
-            "connect-retry 2  8\n" +
-            "connect-retry-max 3\n" +
-            "pull-filter ignore \"bypass-dhcp\"\n" +
-            "<auth-user-pass>\n" +
-            "vpn\n" +
-            "vpn\n" +
-            "</auth-user-pass>\n" +
-            "redirect-gateway def1\n" +
-            "block-ipv6\n"
+        "script-security 2\n" +
+        "data-ciphers AES-256-GCM:AES-128-GCM:AES-192-GCM:AES-256-CBC:AES-128-CBC:CHACHA20-POLY1305\n" +
+        "connect-retry 2  8\n" +
+        "connect-retry-max 3\n" +
+        "pull-filter ignore \"bypass-dhcp\"\n" +
+        "<auth-user-pass>\n" +
+        "vpn\n" +
+        "vpn\n" +
+        "</auth-user-pass>\n" +
+        "redirect-gateway def1\n" +
+        "block-ipv6\n"
 
     val FAIL_MARKERS = listOf(
         "Options error", "AUTH_FAILED", "Cannot resolve host",
