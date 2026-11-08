@@ -18,21 +18,49 @@ internal object ServerHealthChecker {
         val tcpReachable: Boolean?
     )
 
+    private const val MAX_CONCURRENT_PROBES = 40
+    private const val TCP_TIMEOUT_MS = 950
+    private const val MAX_TCP_PROBES = 80
+
     suspend fun rankForConnect(
         servers: List<Server>
     ): List<Candidate> = coroutineScope {
 
-        val semaphore = Semaphore(24)
+        if (servers.isEmpty()) {
+            return@coroutineScope emptyList()
+        }
+
+        val semaphore = Semaphore(MAX_CONCURRENT_PROBES)
+
+        // ابتدا سرورهای TCP با امتیاز بهتر انتخاب می‌شوند
+        val tcpCandidates = servers
+            .filter { it.proto.equals("tcp", true) }
+            .sortedWith(
+                compareBy<Server>(
+                    { if (it.ping > 0) it.ping else Long.MAX_VALUE },
+                    { -it.speed },
+                    { -it.score }
+                )
+            )
+            .take(MAX_TCP_PROBES)
+            .toSet()
 
         servers.map { server ->
             async(Dispatchers.IO) {
+                val reachable = if (
+                    server.proto.equals("tcp", true) &&
+                    server in tcpCandidates
+                ) {
+                    semaphore.withPermit {
+                        probeTcp(server)
+                    }
+                } else {
+                    null
+                }
+
                 Candidate(
-                    server,
-                    if (server.proto.equals("tcp", true)) {
-                        semaphore.withPermit {
-                            probeTcp(server)
-                        }
-                    } else null
+                    server = server,
+                    tcpReachable = reachable
                 )
             }
         }.awaitAll().sortedWith(
@@ -44,11 +72,15 @@ internal object ServerHealthChecker {
                         false -> 2
                     }
                 },
-                { if (it.server.proto == "udp") 0 else 1 },
+                { if (it.server.proto.equals("udp", true)) 0 else 1 },
                 { if (it.server.ping in 1L..<900L) 0 else 1 },
                 { -it.server.speed },
-                { if (it.server.ping > 0)
-                    it.server.ping else Long.MAX_VALUE },
+                {
+                    if (it.server.ping > 0)
+                        it.server.ping
+                    else
+                        Long.MAX_VALUE
+                },
                 { -it.server.score }
             )
         )
@@ -62,10 +94,10 @@ internal object ServerHealthChecker {
         }
 
         return try {
-            Socket().use {
-                it.connect(
+            Socket().use { socket ->
+                socket.connect(
                     InetSocketAddress(server.ip, port),
-                    1800
+                    TCP_TIMEOUT_MS
                 )
                 true
             }
