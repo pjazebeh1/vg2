@@ -98,7 +98,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
 
     // Smart Connect
     // No server-count limit: inspect every ranked server.
-    private val smartConnectHandshakeTimeout = 5_000L
+    private val smartConnectHandshakeTimeout = 30_000L
     private var handshakeWaiter: CompletableDeferred<Boolean>? = null
 
     private var started = false
@@ -357,7 +357,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                         attemptLine(i, ranked.size, r)
 
                         line(
-                            "Waiting for OpenVPN handshake (max 5 s)…",
+                            "Waiting for OpenVPN handshake (max 30 s)…",
                             TerminalLine.Tone.PLAIN
                         )
 
@@ -387,7 +387,7 @@ class VpnViewModel(app: Application) : AndroidViewModel(app) {
                         }
 
                         line(
-                            "Handshake failed or timed out after 5 s — next server",
+                            "Handshake failed or timed out after 30 s — next server",
                             TerminalLine.Tone.WARN
                         )
 
