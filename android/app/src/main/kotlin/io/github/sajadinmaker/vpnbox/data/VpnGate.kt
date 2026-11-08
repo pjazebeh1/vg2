@@ -7,7 +7,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -17,15 +16,14 @@ import kotlinx.serialization.json.jsonPrimitive
 object VpnGate {
 
     const val APP = "vpnbox"
-    const constVersion = "1.0.0-beta5-android"
-    const APP_VERSION = constVersion
+    const APP_VERSION = "1.0.0-beta5-android"
     const UA = "$APP/$APP_VERSION (android; free public VPN client)"
 
     // GitHub mirror: standard VPN Gate CSV
     const val GITHUB_SOURCE =
         "https://cdn.jsdelivr.net/gh/GeorgeXie2333/vpngate-list-mirror@latest/data/vpngate.csv"
 
-    // All server-list sources use GitHub
+    // GitHub-only server list
     const val DEFAULT_SOURCE = GITHUB_SOURCE
     const val MIRROR_SOURCE = GITHUB_SOURCE
 
@@ -69,8 +67,8 @@ object VpnGate {
     private val json = Json { ignoreUnknownKeys = true }
 
     /**
-     * GitHub-only server list.
-     * Other URLs are intentionally not used.
+     * Return GitHub server list URL only.
+     * Other server-list sources are disabled.
      */
     fun sourceUrls(vpngateApi: String? = null): List<String> =
         listOf(GITHUB_SOURCE)
@@ -102,6 +100,7 @@ object VpnGate {
             }
 
             val code = conn.responseCode
+
             if (code !in 200..299) {
                 throw VpnGateError("HTTP error $code")
             }
@@ -127,7 +126,7 @@ object VpnGate {
     fun fetchListText(urls: List<String> = sourceUrls()): String {
         var lastErr: Exception? = null
 
-        // Always use GitHub source, even if another URL is supplied.
+        // Always use GitHub source, ignoring other URLs.
         for (url in sourceUrls()) {
             try {
                 val text = httpGet(url).toString(Charsets.UTF_8)
@@ -227,7 +226,7 @@ object VpnGate {
                         it["query"]?.jsonPrimitive?.content ?: ""
                     }
 
-                for (t in targets) {
+                for (t in chunk) {
                     val g = byIp[t.ip] ?: continue
 
                     if (g["status"]?.jsonPrimitive?.content != "success") {
@@ -235,6 +234,7 @@ object VpnGate {
                     }
 
                     val city = g["city"]?.jsonPrimitive?.content ?: ""
+
                     t.city = city
                     t.isp = g["isp"]?.jsonPrimitive?.content ?: ""
                     t.region = g["regionName"]?.jsonPrimitive?.content ?: ""
@@ -244,6 +244,8 @@ object VpnGate {
                     if (city.isNotEmpty()) ok++
                 }
 
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 continue
             }
