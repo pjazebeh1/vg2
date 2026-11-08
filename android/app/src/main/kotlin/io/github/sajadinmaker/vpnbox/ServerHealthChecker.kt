@@ -19,8 +19,8 @@ internal object ServerHealthChecker {
     )
 
     private const val MAX_CONCURRENT_PROBES = 40
-    private const val TCP_TIMEOUT_MS = 950
-    private const val MAX_TCP_PROBES = 80
+    private const val TCP_TIMEOUT_MS = 700
+    private const val MAX_TCP_PROBES = 100
 
     suspend fun rankForConnect(
         servers: List<Server>
@@ -32,7 +32,6 @@ internal object ServerHealthChecker {
 
         val semaphore = Semaphore(MAX_CONCURRENT_PROBES)
 
-        // ابتدا سرورهای TCP با امتیاز بهتر انتخاب می‌شوند
         val tcpCandidates = servers
             .filter { it.proto.equals("tcp", true) }
             .sortedWith(
@@ -47,6 +46,7 @@ internal object ServerHealthChecker {
 
         servers.map { server ->
             async(Dispatchers.IO) {
+
                 val reachable = if (
                     server.proto.equals("tcp", true) &&
                     server in tcpCandidates
@@ -72,15 +72,9 @@ internal object ServerHealthChecker {
                         false -> 2
                     }
                 },
-                { if (it.server.proto.equals("udp", true)) 0 else 1 },
-                { if (it.server.ping in 1L..<900L) 0 else 1 },
+                { if (it.server.ping in 1L..<500L) 0 else 1 },
+                { if (it.server.ping > 0) it.server.ping else Long.MAX_VALUE },
                 { -it.server.speed },
-                {
-                    if (it.server.ping > 0)
-                        it.server.ping
-                    else
-                        Long.MAX_VALUE
-                },
                 { -it.server.score }
             )
         )
