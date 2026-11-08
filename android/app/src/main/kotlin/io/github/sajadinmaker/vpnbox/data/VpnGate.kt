@@ -17,17 +17,17 @@ import kotlinx.serialization.json.jsonPrimitive
 object VpnGate {
 
     const val APP = "vpnbox"
-    const val APP_VERSION = "1.0.0-beta5-android"
-    const val UA = "$APP/$APP_VERSION (android; free public VPN client)"
+    const constVersion = "1.0.0-beta5-android"
+    const APP_VERSION = constVersion
+    const UA = "$APP/$APP_VERSION (android; free public VPN client)"
 
     // GitHub mirror: standard VPN Gate CSV
     const val GITHUB_SOURCE =
         "https://cdn.jsdelivr.net/gh/GeorgeXie2333/vpngate-list-mirror@latest/data/vpngate.csv"
 
-    // Original VPN Gate sources (fallback)
-    const val DEFAULT_SOURCE = "https://www.vpngate.net/api/iphone/"
-    const constMirror = "http://www.vpngate.net/api/iphone/"
-    const MIRROR_SOURCE = constMirror
+    // All server-list sources use GitHub
+    const val DEFAULT_SOURCE = GITHUB_SOURCE
+    const val MIRROR_SOURCE = GITHUB_SOURCE
 
     const val HOSTNAME_HEADER = "#HostName"
 
@@ -68,14 +68,12 @@ object VpnGate {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** GitHub first, then official VPN Gate fallbacks. */
+    /**
+     * GitHub-only server list.
+     * Other URLs are intentionally not used.
+     */
     fun sourceUrls(vpngateApi: String? = null): List<String> =
-        listOfNotNull(
-            vpngateApi,
-            GITHUB_SOURCE,
-            DEFAULT_SOURCE,
-            MIRROR_SOURCE
-        )
+        listOf(GITHUB_SOURCE)
 
     fun httpGet(
         url: String,
@@ -88,6 +86,7 @@ object VpnGate {
             connectTimeout = timeoutMs
             readTimeout = timeoutMs
             setRequestProperty("User-Agent", UA)
+
             if (data != null) {
                 doOutput = true
                 setRequestProperty(
@@ -122,11 +121,14 @@ object VpnGate {
         }
     }
 
-    /** Fetch server list, trying GitHub first and fallbacks afterward. */
+    /**
+     * Fetch server list from GitHub only.
+     */
     fun fetchListText(urls: List<String> = sourceUrls()): String {
         var lastErr: Exception? = null
 
-        for (url in urls) {
+        // Always use GitHub source, even if another URL is supplied.
+        for (url in sourceUrls()) {
             try {
                 val text = httpGet(url).toString(Charsets.UTF_8)
 
@@ -148,7 +150,7 @@ object VpnGate {
         }
 
         throw VpnGateError(
-            "could not reach any VPN Gate mirror " +
+            "could not reach GitHub VPN server list " +
                 "(${lastErr?.javaClass?.simpleName}: ${lastErr?.message}). " +
                 "Check your connection and try again."
         )
@@ -228,18 +230,16 @@ object VpnGate {
                 for (t in targets) {
                     val g = byIp[t.ip] ?: continue
 
-                    if (g["status"]?.jsonPrimitive?.booleanOrNull != true) {
+                    if (g["status"]?.jsonPrimitive?.content != "success") {
                         continue
                     }
 
-                    val obj = g.jsonObject
-
-                    val city = obj["city"]?.jsonPrimitive?.content ?: ""
+                    val city = g["city"]?.jsonPrimitive?.content ?: ""
                     t.city = city
-                    t.isp = obj["isp"]?.jsonPrimitive?.content ?: ""
-                    t.region = obj["regionName"]?.jsonPrimitive?.content ?: ""
-                    t.lat = obj["lat"]?.jsonPrimitive?.doubleOrNull
-                    t.lon = obj["lon"]?.jsonPrimitive?.doubleOrNull
+                    t.isp = g["isp"]?.jsonPrimitive?.content ?: ""
+                    t.region = g["regionName"]?.jsonPrimitive?.content ?: ""
+                    t.lat = g["lat"]?.jsonPrimitive?.doubleOrNull
+                    t.lon = g["lon"]?.jsonPrimitive?.doubleOrNull
 
                     if (city.isNotEmpty()) ok++
                 }
